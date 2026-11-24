@@ -20,11 +20,14 @@ enum PairingStore {
 
     static func loadPairing() -> Data? { try? Data(contentsOf: pairingURL) }
 
-    /// Copies a user-picked file into the container (handles security-scoped URLs from Files).
-    static func importFile(from source: URL, to destination: URL) throws {
+    /// Reads a user-picked file (handles security-scoped URLs from Files).
+    static func read(_ source: URL) throws -> Data {
         let scoped = source.startAccessingSecurityScopedResource()
         defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-        let data = try Data(contentsOf: source)
+        return try Data(contentsOf: source)
+    }
+
+    static func save(_ data: Data, to destination: URL) throws {
         try data.write(to: destination, options: [.atomic, .completeFileProtection])
     }
 }

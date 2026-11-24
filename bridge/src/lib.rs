@@ -413,10 +413,16 @@ pub unsafe extern "C" fn ipab_install_ipa(
             .parse()
             .map_err(|e| format!("invalid target IP: {e}"))?;
         let ipa_path = ipa_path.ok_or("no IPA path")?;
-        let ipa = tokio::fs::read(&ipa_path)
+        // A file is uploaded as one .ipa and sent to `Install`; a directory (an .app bundle) is
+        // mirrored into PublicStaging and sent as a developer package (idevice handles both).
+        let meta = tokio::fs::metadata(&ipa_path)
             .await
-            .map_err(|e| format!("could not read IPA at {ipa_path}: {e}"))?;
-        log.step(format!("read IPA: {} bytes", ipa.len()));
+            .map_err(|e| format!("could not read package at {ipa_path}: {e}"))?;
+        if meta.is_dir() {
+            log.step(format!("package is an .app directory: {ipa_path}"));
+        } else {
+            log.step(format!("package is an .ipa file: {} bytes", meta.len()));
+        }
 
         let callback = |(pct, p): (u64, Progress)| async move { p.report(pct) };
 
@@ -427,7 +433,7 @@ pub unsafe extern "C" fn ipab_install_ipa(
                 with_timeout(
                     "install (lockdown)",
                     INSTALL_TIMEOUT,
-                    installation::install_bytes_with_callback(&provider, ipa, None, callback, state),
+                    installation::install_package_with_callback(&provider, &ipa_path, None, callback, state),
                 )
                 .await?;
             }
@@ -438,10 +444,10 @@ pub unsafe extern "C" fn ipab_install_ipa(
                 with_timeout(
                     "install (RSD)",
                     INSTALL_TIMEOUT,
-                    installation::install_bytes_with_callback_rsd(
+                    installation::install_package_with_callback_rsd(
                         &mut adapter,
                         &mut handshake,
-                        ipa,
+                        &ipa_path,
                         None,
                         callback,
                         state,
