@@ -15,7 +15,9 @@ struct ContentView: View {
     @State private var busy = false
     @State private var progress: Double?
     @State private var log = UserDefaults.standard.string(forKey: Keys.log) ?? ""
-    @State private var importing: ImportTarget?
+    @State private var showImporter = false
+    // Kept separately: the picker clears its isPresented binding before calling the completion.
+    @State private var importTarget: ImportTarget = .pairing
     @State private var portFinder: RemotePairingPortFinder?
 
     enum ImportTarget: Identifiable { case pairing, ipa; var id: Self { self } }
@@ -42,7 +44,7 @@ struct ContentView: View {
         NavigationStack {
             Form {
                 Section("1 · Pairing file (NOT the IPA)") {
-                    Button("Import pairing file…") { importing = .pairing }
+                    Button("Import pairing file…") { importTarget = .pairing; showImporter = true }
                     Text(pairingInfo).font(.footnote).foregroundStyle(.secondary)
                     LabeledContent("Mode", value: pairing == nil ? "—" : pairingKind.label)
                 }
@@ -65,7 +67,7 @@ struct ContentView: View {
 
                 Section {
                     Button("Self-reinstall test") { runSelfReinstall() }.disabled(!ready)
-                    Button("Choose IPA…") { importing = .ipa }
+                    Button("Choose IPA…") { importTarget = .ipa; showImporter = true }
                     if let ipaName { Text(ipaName).font(.footnote).foregroundStyle(.secondary) }
                     Button("Install chosen IPA") { runInstall(url: PairingStore.ipaURL, label: ipaName ?? "IPA") }
                         .disabled(!ready || ipaName == nil)
@@ -91,7 +93,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("IPA PoC")
-            .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
+            .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: allowedTypes()) { handleImport($0) }
             .onAppear {
                 refreshPairingInfo()
@@ -103,15 +105,14 @@ struct ContentView: View {
     // MARK: - Import
 
     private func allowedTypes() -> [UTType] {
-        switch importing {
+        switch importTarget {
         case .ipa: return [UTType(filenameExtension: "ipa") ?? .data, .data]
         default: return [.propertyList, .xml, .data, .item]
         }
     }
 
     private func handleImport(_ result: Result<URL, Error>) {
-        let target = importing
-        importing = nil
+        let target = importTarget
         switch result {
         case .failure(let error):
             append("Import failed: \(error.localizedDescription)")
