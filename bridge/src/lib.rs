@@ -32,6 +32,8 @@ use idevice::tcp::adapter::Adapter;
 use idevice::tcp::handle::AdapterHandle;
 use idevice::utils::installation;
 
+mod signing;
+
 pub const MODE_LOCKDOWN: i32 = 0;
 pub const MODE_RPPAIRING: i32 = 1;
 

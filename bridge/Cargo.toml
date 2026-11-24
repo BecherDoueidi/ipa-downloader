@@ -13,7 +13,8 @@ crate-type = ["staticlib"]
 # Pinned on purpose: idevice warns that every point release before 0.2.0 may break the API.
 # All calls in src/lib.rs were checked against the 0.1.68 sources.
 idevice = { version = "=0.1.68", default-features = false, features = [
-  "aws-lc",
+  # ring (not aws-lc) so idevice and isideload share one rustls crypto provider.
+  "ring",
   "afc",
   "installation_proxy",
   "rsd",
@@ -22,6 +23,13 @@ idevice = { version = "=0.1.68", default-features = false, features = [
   "tunnel_tcp_stack",
 ] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "fs"] }
+# Free Apple ID signing (MIT, used by iloader): Apple ID login + 2FA, anisette, developer
+# certificate / App ID / profile, and on-device code signing. No keyring feature: secrets go
+# to the iOS Keychain through the storage callbacks in src/signing.rs.
+isideload = { version = "=0.5.2", default-features = false, features = ["install", "tokio-mt"] }
+rootcause = "0.12"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+libc = "0.2"
 
 [profile.release]
 panic = "abort"

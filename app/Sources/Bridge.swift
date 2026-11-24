@@ -68,6 +68,53 @@ enum Bridge {
         return BridgeResult(success: code == 0, log: take(out))
     }
 
+    // MARK: - Free Apple ID signing
+
+    static func registerStorage(store: ipab_store_cb, retrieve: ipab_retrieve_cb) {
+        ipab_set_storage_callbacks(store, retrieve)
+    }
+
+    static var isSignedIn: Bool { ipab_is_signed_in() == 1 }
+
+    static func signOut() { ipab_sign_out() }
+
+    /// Blocking. `askTwoFactor` is called on a background thread and must block until the user
+    /// answers; return nil to cancel.
+    static func login(email: String, password: String,
+                      askTwoFactor: @escaping (String) -> String?) -> BridgeResult {
+        let box = TwoFactorBox(askTwoFactor)
+        let context = Unmanaged.passRetained(box).toOpaque()
+        defer { Unmanaged<TwoFactorBox>.fromOpaque(context).release() }
+        var out: UnsafeMutablePointer<CChar>?
+        let code = ipab_apple_login(email, password, { prompt, ctx in
+            guard let ctx else { return nil }
+            let text = prompt.map { String(cString: $0) } ?? ""
+            let box = Unmanaged<TwoFactorBox>.fromOpaque(ctx).takeUnretainedValue()
+            guard let answer = box.handler(text) else { return nil }
+            return strdup(answer)
+        }, context, &out)
+        return BridgeResult(success: code == 0, log: take(out))
+    }
+
+    static func signAndInstall(kind: PairingKind, pairing: Data, ip: String, port: UInt16,
+                               ipaURL: URL, allowRevoke: Bool,
+                               onProgress: @escaping (UInt64) -> Void) -> BridgeResult {
+        let box = ProgressBox(onProgress)
+        let context = Unmanaged.passRetained(box).toOpaque()
+        defer { Unmanaged<ProgressBox>.fromOpaque(context).release() }
+        var out: UnsafeMutablePointer<CChar>?
+        let code = pairing.withUnsafeBytes { raw in
+            ipab_sign_and_install(kind.mode, raw.bindMemory(to: UInt8.self).baseAddress, raw.count,
+                                  ip, port, hostname, ipaURL.path, allowRevoke ? 1 : 0,
+                                  { percent, ctx in
+                                      guard let ctx else { return }
+                                      Unmanaged<ProgressBox>.fromOpaque(ctx).takeUnretainedValue().handler(percent)
+                                  },
+                                  context, &out)
+        }
+        return BridgeResult(success: code == 0, log: take(out))
+    }
+
     private static func take(_ ptr: UnsafeMutablePointer<CChar>?) -> String {
         guard let ptr else { return "" }
         defer { ipab_free_string(ptr) }
@@ -78,4 +125,9 @@ enum Bridge {
 private final class ProgressBox {
     let handler: (UInt64) -> Void
     init(_ handler: @escaping (UInt64) -> Void) { self.handler = handler }
+}
+
+private final class TwoFactorBox {
+    let handler: (String) -> String?
+    init(_ handler: @escaping (String) -> String?) { self.handler = handler }
 }
