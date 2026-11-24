@@ -1,0 +1,29 @@
+[package]
+name = "ipabridge"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Phase 0 PoC: minimal C ABI over the idevice crate for same-device IPA installation"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+# Pinned on purpose: idevice warns that every point release before 0.2.0 may break the API.
+# All calls in src/lib.rs were checked against the 0.1.68 sources.
+idevice = { version = "=0.1.68", default-features = false, features = [
+  "aws-lc",
+  "afc",
+  "installation_proxy",
+  "rsd",
+  "tcp",
+  "remote_pairing",
+  "tunnel_tcp_stack",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "fs"] }
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "z"

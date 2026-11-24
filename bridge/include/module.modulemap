@@ -1,0 +1,5 @@
+module IPABridge {
+    header "ipabridge.h"
+    link "ipabridge"
+    export *
+}

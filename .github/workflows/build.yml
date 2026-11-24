@@ -1,0 +1,67 @@
+name: Build PoC IPA
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (iOS target)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-apple-ios
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            bridge/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('bridge/Cargo.toml', 'bridge/Cargo.lock') }}
+
+      - name: Build Rust bridge (aarch64-apple-ios)
+        working-directory: bridge
+        env:
+          IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        run: |
+          cargo build --release --target aarch64-apple-ios
+          ls -lh target/aarch64-apple-ios/release/libipabridge.a
+
+      - name: Generate Xcode project
+        working-directory: app
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build unsigned app
+        working-directory: app
+        run: |
+          xcodebuild \
+            -project IPAPoC.xcodeproj \
+            -scheme IPAPoC \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA
+        working-directory: app
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/IPAPoC.app Payload/
+          zip -qry IPAPoC-unsigned.ipa Payload
+          ls -lh IPAPoC-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IPAPoC-unsigned
+          path: app/IPAPoC-unsigned.ipa
+          if-no-files-found: error

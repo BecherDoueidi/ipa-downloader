@@ -1,0 +1,17 @@
+# Rust
+bridge/target/
+
+# Xcode (project is generated from app/project.yml)
+app/*.xcodeproj/
+app/build/
+app/Payload/
+*.ipa
+
+# Never commit pairing files or signing material
+*.plist.pairing
+*.mobiledevicepairing
+*rppairing*
+*.p12
+*.mobileprovision
+
+.DS_Store
